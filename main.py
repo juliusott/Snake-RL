@@ -1,6 +1,9 @@
 from PySide2.QtWidgets import QApplication
+from GameWindow import GameWindow
 import sys
 
-if __name__ == "__main___":
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    sys.exit(app.exec_())
+    game = GameWindow()
+    app.exec_()
+    sys.exit(app.exit())
