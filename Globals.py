@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from PySide2.QtWidgets import QGraphicsRectItem
+from PySide2.QtWidgets import QGraphicsRectIte
 PLAYGROUND_SIZEX = 100
 PLAYGROUND_SIZEY = 100
 SCALE_FACTORX = 10
@@ -12,20 +12,20 @@ class Point:
 
     def __add__(self, other_point):
         result = Point()
-        result.x = (WINDOW_SIZEX + ((self.x + other_point.x) % WINDOW_SIZEX)) % WINDOW_SIZEX  # Damit '-1 % 15 == 14'!
-        result.y = (WINDOW_SIZEY + ((self.y + other_point.y) % WINDOW_SIZEY)) % WINDOW_SIZEY
+        result.x = (PLAYGROUND_SIZEX + ((self.x + other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # Damit '-1 % 15 == 14'!
+        result.y = (PLAYGROUND_SIZEY + ((self.y + other_point.y) % PLAYGROUND_SIZEY)) % PLAYGROUND_SIZEY
         return result
 
     def __sub__(self, other_point):
         result = Point()
-        result.x = (WINDOW_SIZEX + ((self.x - other_point.x) % WINDOW_SIZEX)) % WINDOW_SIZEX  # Damit '-1 % 15 == 14'!
-        result.y = (WINDOW_SIZEY + ((self.y - other_point.y) % WINDOW_SIZEY)) % WINDOW_SIZEY
+        result.x = (PLAYGROUND_SIZEX + ((self.x - other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # Damit '-1 % 15 == 14'!
+        result.y = (PLAYGROUND_SIZEY + ((self.y - other_point.y) % PLAYGROUND_SIZEY)) % PLAYGROUND_SIZEY
         return result
 
 
 @dataclass
 class State:
-    snake: []  # this will be a list of points
+    snake: [] # this will be a list of points
     goal: Point
     snake_length: int
     goal_collision: bool

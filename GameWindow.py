@@ -40,8 +40,9 @@ class GameWindow(QGraphicsView):
         self.goal.setBrush(self.brush)
         self.scene.addItem(self.goal)
 
-        self.state = State(snake=self.snake, goal=Point(0, 0), snake_length=1, goal_collision=False,
-                           self_collision=False)
+
         self.show()
 
-    def start(self):
+    def draw(self, state):
+        self.goal.setPos(state.goal.x*SCALE_FACTORX, state.goal.y* SCALE_FACTORY)
+        self.goal.setVisible(True)
