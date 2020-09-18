@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 import numpy as np
+import matplotlib.pyplot as plt
 
 PLAYGROUND_SIZEX = 10
 PLAYGROUND_SIZEY = 10
 SCALE_FACTORX = 15
 SCALE_FACTORY = 15
-MAX_LENGTH_SNAKE = int(PLAYGROUND_SIZEX * PLAYGROUND_SIZEY)
+MAX_LENGTH_SNAKE = 40 #int(PLAYGROUND_SIZEX * PLAYGROUND_SIZEY)
 
 
 @dataclass
@@ -16,14 +17,14 @@ class Point:
     def __add__(self, other_point):
         result = Point(0, 0)
         result.x = (PLAYGROUND_SIZEX + (
-                    (self.x + other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # such that '-1 % 15 == 14'!
+                (self.x + other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # such that '-1 % 15 == 14'!
         result.y = (PLAYGROUND_SIZEY + ((self.y + other_point.y) % PLAYGROUND_SIZEY)) % PLAYGROUND_SIZEY
         return result
 
     def __sub__(self, other_point):
         result = Point(0, 0)
         result.x = (PLAYGROUND_SIZEX + (
-                    (self.x - other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # such that '-1 % 15 == 14'!
+                (self.x - other_point.x) % PLAYGROUND_SIZEX)) % PLAYGROUND_SIZEX  # such that '-1 % 15 == 14'!
         result.y = (PLAYGROUND_SIZEY + ((self.y - other_point.y) % PLAYGROUND_SIZEY)) % PLAYGROUND_SIZEY
         return result
 
@@ -44,3 +45,12 @@ class State:
         state[-2] = self.goal.x
         state[-1] = self.goal.y
         return state
+
+    def to_image(self):
+        state = np.zeros((PLAYGROUND_SIZEX, PLAYGROUND_SIZEY))
+        head = self.snake[0]
+        state[head.x, head.y] = 180
+        for point in self.snake[1:]:
+            state[point.x, point.y] = 100
+        state[self.goal.x, self.goal.y] = 250
+        return state.reshape((1, PLAYGROUND_SIZEX, PLAYGROUND_SIZEY)) / 255.

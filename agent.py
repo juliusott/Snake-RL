@@ -14,25 +14,35 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__()
-        self.layer1 = nn.Linear(2 * MAX_LENGTH_SNAKE + 2, 512)
+        self.conv1 = nn.Conv2d(1, 32, 1, stride=2)
+        self.max = nn.MaxPool2d(3)
+        self.conv2 = nn.Conv2d(32, 64, 1, stride=2)
+        self.layer1 = nn.Linear(64, 32)
         self.drop = nn.Dropout(0.5)
-        self.layer2 = nn.Linear(512, 256)
-        self.layer3 = nn.Linear(256, 128)
-        self.layer4 = nn.Linear(128, 64)
-        self.action = nn.Linear(64, 4)  # 4 possible actions
+        self.layer2 = nn.Linear(32, 16)
+        self.action = nn.Linear(16, 4)  # 4 possible actions
 
     def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.max(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
         x = F.relu(self.drop(self.layer1(x)))
         x = F.relu(self.drop(self.layer2(x)))
-        x = F.relu(self.drop(self.layer3(x)))
-        x = F.relu(self.drop(self.layer4(x)))
         x = self.action(x)
         return x
 
 
+def possible_actions(state):
+    _possible_actions = [True, True, True, True]
+    for i, direct in enumerate([Point(0, -1), Point(0, 1), Point(-1, 0), Point(1, 0)]):
+        if state.snake_length > 1 and state.snake[0] + direct == state.snake[1]:
+            _possible_actions[i] = False
+    return _possible_actions
+
+
 class Agent:
-    def __init__(self, batch_size=512, buffer_size=5000, gamma=0.9, eps_start=0.9, eps_decay=200, eps_end=0.05,
-                 target_update=20):
+    def __init__(self, batch_size=256, buffer_size=5000, gamma=0.9, eps_start=0.9, eps_decay=1000, eps_end=0.05,
+                 target_update=1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
         self.policy_network = Network().double().to(self.device)
@@ -45,7 +55,7 @@ class Agent:
         self.eps_end = eps_end
         self.target_update = target_update
         self.steps_done = 0
-        self.optimizer = optim.RMSprop(self.policy_network.parameters())
+        self.optimizer = optim.Adam(self.policy_network.parameters())
         self.plot_buffer = []
         self.plot_means = deque(maxlen=100)
         self.line1 = None
@@ -54,20 +64,25 @@ class Agent:
         self.memory.add(observation)
         self.optimize_model()
 
-    def get_action(self, state):  # decaying epsilon greedy strategy
+    def get_action(self, state, _possible_actions):  # decaying epsilon greedy strategy
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1 * self.steps_done / self.eps_decay)
         self.steps_done += 1
         if np.random.rand() < eps_threshold:
-            action = torch.randint(0, 3, (1,))
+            all_actions = np.arange(0, 4)
+            action = np.random.choice(all_actions[_possible_actions.cpu().numpy()[0]])
             # print("epsilon greedy action {}, threshold: {}".format(action.item(), eps_threshold))
         else:
             with torch.no_grad():
-                action = self.policy_network(state.double()).max(1)[1]
+                out = torch.zeros((1, 4), dtype=torch.double, device=self.device)
+                out[_possible_actions] = self.policy_network(state.double())[_possible_actions]
+                action = out.max(1)[-1]
+                print("q values {}".format(out))
                 # print("action from network ", action.item())
         return action.item()
 
     def update_target_network(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
+        torch.save(self.policy_network.state_dict(), "DQN_Network.pth")
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
@@ -78,29 +93,33 @@ class Agent:
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
         """ToDo: Check if the next state is a final state"""
+        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                                batch.next_state)), device=self.device, dtype=torch.bool)
+        non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
         new_state_batch = torch.cat(batch.next_state)
         """Compute the state-action values, the model computes Q(s) and we select the best action"""
         state_action_values = self.policy_network(state_batch).gather(1, action_batch.unsqueeze(-1))
         """next state values computed by the old target network"""
-        next_state_values = self.target_network(new_state_batch.float()).max(1)[0]
+        next_state_values = torch.zeros(self.batch_size, device=self.device)
+        next_state_values[non_final_mask] = self.target_network(non_final_next_states.float()).max(1)[0]
+        # print("next state values : {}".format(next_state_values))
         """Compute the expected Q values"""
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
         loss = F.smooth_l1_loss(state_action_values.squeeze(1), expected_state_action_values)
         # print( "Loss {}".format(loss.item()))
         self.optimizer.zero_grad()
         loss.backward()
-        """TODO: Add gradient clipping here"""
         for param in self.policy_network.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
         if len(self.plot_buffer) < 100:
             self.plot_buffer.append(np.around(loss.item(), decimals=3))
-            print("add loss to buffer {}".format(loss.item()))
-            print("buffer length {}".format(len(self.plot_buffer)))
+            # print("add loss to buffer {}".format(loss.item()))
+            # print("buffer length {}".format(len(self.plot_buffer)))
         else:
             mean = np.mean(self.plot_buffer)
             self.plot_means.append(np.around(mean, decimals=3))
-            print("mean loss after 100 iterations {}".format(self.plot_means))
+            # print("mean loss after 100 iterations {}".format(self.plot_means))
             self.plot_buffer = []
         if len(self.plot_means) > 10:
             self.live_plot()
