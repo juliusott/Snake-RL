@@ -41,8 +41,8 @@ def possible_actions(state):
 
 
 class Agent:
-    def __init__(self, batch_size=256, buffer_size=5000, gamma=0.9, eps_start=0.9, eps_decay=1000, eps_end=0.05,
-                 target_update=1):
+    def __init__(self, batch_size=16, buffer_size=5000, gamma=0.9, eps_start=0.9, eps_decay=1000, eps_end=0.05,
+                 target_update=5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
         self.policy_network = Network().double().to(self.device)
@@ -56,8 +56,7 @@ class Agent:
         self.target_update = target_update
         self.steps_done = 0
         self.optimizer = optim.Adam(self.policy_network.parameters())
-        self.plot_buffer = []
-        self.plot_means = deque(maxlen=100)
+        self.plot_loss = deque(maxlen=5000)
         self.line1 = None
 
     def step(self, observation):
@@ -73,10 +72,10 @@ class Agent:
             # print("epsilon greedy action {}, threshold: {}".format(action.item(), eps_threshold))
         else:
             with torch.no_grad():
-                out = torch.zeros((1, 4), dtype=torch.double, device=self.device)
+                out = torch.zeros((1, 4), dtype=torch.double, device=self.device) -100 # this is bad but works
                 out[_possible_actions] = self.policy_network(state.double())[_possible_actions]
                 action = out.max(1)[-1]
-                print("q values {}".format(out))
+                # print("q values {}".format(out))
                 # print("action from network ", action.item())
         return action.item()
 
@@ -107,42 +106,25 @@ class Agent:
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
         loss = F.smooth_l1_loss(state_action_values.squeeze(1), expected_state_action_values)
         # print( "Loss {}".format(loss.item()))
+        self.plot_loss.append(loss.item())
         self.optimizer.zero_grad()
         loss.backward()
+
         for param in self.policy_network.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
-        if len(self.plot_buffer) < 100:
-            self.plot_buffer.append(np.around(loss.item(), decimals=3))
-            # print("add loss to buffer {}".format(loss.item()))
-            # print("buffer length {}".format(len(self.plot_buffer)))
-        else:
-            mean = np.mean(self.plot_buffer)
-            self.plot_means.append(np.around(mean, decimals=3))
-            # print("mean loss after 100 iterations {}".format(self.plot_means))
-            self.plot_buffer = []
-        if len(self.plot_means) > 10:
-            self.live_plot()
+        # self.live_plot()
 
-    def live_plot(self, pause_time=0.1):
-        x = np.arange(len(self.plot_means))
-        if not self.line1:
-            # this is the call to matplotlib that allows dynamic plotting
-            print("Creating new plot")
-            plt.ion()
-            fig = plt.figure(figsize=(13, 6))
-            ax = fig.add_subplot(111)
-            # create a variable for the line so we can later update it
-            self.line1, = ax.plot(x, self.plot_means, '-o', alpha=0.8)
-            # update plot label/title
-            plt.ylabel('Value')
-            plt.title("Loss Plot")
-            plt.show()
+    def plot(self):
+        x = np.arange(len(self.plot_loss))
+        fig = plt.figure(figsize=(13, 6))
+        ax = fig.add_subplot(111)
+        # create a variable for the line so we can later update it
+        self.line1, = ax.plot(x, self.plot_loss, '-o', alpha=0.8)
+        plt.ylabel('Value')
+        plt.title("Loss Plot")
+        plt.show(block=False)
 
-        # after the figure, axis, and line are created, we only need to update the y-data
-        self.line1.set_data(x, self.plot_means)
-        # this pauses the data so the figure/axis can catch up - the amount of pause can be altered above
-        plt.pause(pause_time)
 
 
 class Memory:

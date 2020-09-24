@@ -28,6 +28,9 @@ class Point:
         result.y = (PLAYGROUND_SIZEY + ((self.y - other_point.y) % PLAYGROUND_SIZEY)) % PLAYGROUND_SIZEY
         return result
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
 
 @dataclass
 class State:
@@ -49,8 +52,8 @@ class State:
     def to_image(self):
         state = np.zeros((PLAYGROUND_SIZEX, PLAYGROUND_SIZEY))
         head = self.snake[0]
-        state[head.x, head.y] = 180
+        state[head.x, head.y] = 200
         for point in self.snake[1:]:
-            state[point.x, point.y] = 100
+            state[point.x, point.y] = 200
         state[self.goal.x, self.goal.y] = 250
         return state.reshape((1, PLAYGROUND_SIZEX, PLAYGROUND_SIZEY)) / 255.
