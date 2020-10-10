@@ -25,7 +25,7 @@ class GameEngine(GameWindow):
         self.randomInit()
         self.start_run = 0
         self.network_state = None
-        self.screens = deque(maxlen=2) # maxlen determines how many screens you want to give to the agent
+        self.screens = deque(maxlen=4)  # maxlen determines how many screens you want to give to the agent
         self.high_score = 0
 
     def testInit(self):
@@ -111,27 +111,29 @@ class GameEngine(GameWindow):
         """computes the manhattan distance between the snake head and apple
         Note: this distance works only for a squared playground"""
         snake_head = state.snake[0]
-        dis_x = np.abs(snake_head.x - self.state.goal.x) % (PLAYGROUND_SIZEX-1)
-        dis_y = np.abs(snake_head.y - self.state.goal.y) % (PLAYGROUND_SIZEX-1)
-        return dis_x+dis_y
+        dis_x = np.abs(snake_head.x - self.state.goal.x) % (PLAYGROUND_SIZEX - 1)
+        dis_y = np.abs(snake_head.y - self.state.goal.y) % (PLAYGROUND_SIZEX - 1)
+        return dis_x + dis_y
 
     def training(self):
         for i_episode in range(self.num_episodes):
             self.iteration = 0
             self.screens.append(self.state.to_image())
             self.screens.append(self.state.to_image())
-            state = self.screens[1] - self.screens[0]
+            self.screens.append(self.state.to_image())
+            self.screens.append(self.state.to_image())
+            state = np.squeeze(self.screens)
+            print(np.shape(state))
             self.done = False
             while not self.done:
                 self.iteration += 1
-                pos_a = possible_actions(self.state)
-                action = self.agent.get_action(torch.tensor([state], device=self.agent.device),
-                                               torch.tensor([pos_a], device=self.agent.device))
+                action = self.agent.get_action(torch.tensor([state], device=self.agent.device))
 
-                # print("allowd actions {} and action {}".format(pos_a, action))
+
+                # print("allowed actions {} and action {}".format(pos_a, action))
                 self.screens.append(self.state.to_image())
                 if not self.done:
-                    next_state = self.screens[1] - self.screens[0]
+                    next_state =  np.squeeze(self.screens)
                 else:
                     next_state = None
 
@@ -156,21 +158,23 @@ class GameEngine(GameWindow):
                 print("updating target network")
         print("high score {}".format(self.high_score))
         self.agent.plot()
+
     def run(self):
         if self.start_run == 0:
             self.screens.append(self.state.to_image())
             self.screens.append(self.state.to_image())
-            self.network_state = self.screens[1] - self.screens[0]
+            self.screens.append(self.state.to_image())
+            self.screens.append(self.state.to_image())
+            self.network_state = np.squeeze(self.screens)
         self.start_run = 1
         self.done = False
         self.timeout = 500
         self.agent.policy_network.eval()
-        pos_a = possible_actions(self.state)
         action = self.agent.get_action(torch.tensor([self.network_state], device=self.agent.device),
-                                       torch.tensor([pos_a], device=self.agent.device))
+                                       )
         self.screens.append(self.state.to_image())
         if not self.done:
-            next_state = self.screens[1] - self.screens[0]
+            next_state = np.squeeze(self.screens)
         else:
             next_state = None
         self.network_state = next_state

@@ -14,22 +14,23 @@ Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"
 class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 1, stride=2)
+        self.conv1 = nn.Conv2d(4, 32, 1, stride=2)
         self.max = nn.MaxPool2d(3)
         self.conv2 = nn.Conv2d(32, 64, 1, stride=2)
         self.layer1 = nn.Linear(64, 32)
-        self.drop = nn.Dropout(0.5)
         self.layer2 = nn.Linear(32, 16)
         self.action = nn.Linear(16, 4)  # 4 possible actions
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
+        print("input shape {}".format(x.shape))
         x = F.relu(self.conv1(x))
         x = self.max(F.relu(self.conv2(x)))
         x = x.view(x.size(0), -1)
-        x = F.relu(self.drop(self.layer1(x)))
-        x = F.relu(self.drop(self.layer2(x)))
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
         x = self.action(x)
-        return x
+        return self.softmax(x)
 
 
 def possible_actions(state):
@@ -63,9 +64,15 @@ class Agent:
         self.memory.add(observation)
         self.optimize_model()
 
-    def get_action(self, state, _possible_actions):  # decaying epsilon greedy strategy
+    def get_action(self, state):  # decaying epsilon greedy strategy
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1 * self.steps_done / self.eps_decay)
         self.steps_done += 1
+        all_actions = np.arange(0, 4)
+        with torch.no_grad():
+            out = self.policy_network(state.double())
+            print("proba distro {}".format(out))
+            action = np.random.choice(all_actions, p= out.cpu().numpy()[0])
+        """
         if np.random.rand() < eps_threshold:
             all_actions = np.arange(0, 4)
             action = np.random.choice(all_actions[_possible_actions.cpu().numpy()[0]])
@@ -77,7 +84,8 @@ class Agent:
                 action = out.max(1)[-1]
                 # print("q values {}".format(out))
                 # print("action from network ", action.item())
-        return action.item()
+        """
+        return action
 
     def update_target_network(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
