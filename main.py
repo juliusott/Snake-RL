@@ -5,7 +5,7 @@ import sys
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    engine = GameEngine(num_episodes=20)
+    engine = GameEngine(num_episodes=100)
     engine.training()
     engine.start()
     app.exec_()

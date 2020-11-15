@@ -4,6 +4,7 @@ import numpy as np
 from PySide2.QtCore import QTimer, QObject, SIGNAL
 import copy
 from itertools import count
+import pandas as pd
 from agent import *
 
 
@@ -88,15 +89,15 @@ class GameEngine(GameWindow):
             self.reward = 10
             self.state.goal = Point(np.random.randint(0, PLAYGROUND_SIZEX), np.random.randint(0, PLAYGROUND_SIZEY))
             print("Hurray, got an apple")
-            print(self.state.snake)
+            # print(self.state.snake)
         if self.state.snake_length == MAX_LENGTH_SNAKE:
             self.reward = 10 + self.state.snake_length
             self.done = True
         elif self.new_state.snake[0] in self.state.snake:
             self.reward = -100
-            print("Collision!")
-            print(self.state.snake)
-            print("moved " + directions[action])
+            # print("Collision!")
+            # print(self.state.snake)
+            # print("moved " + directions[action])
             self.done = True
         # copy updated state to new state
         self.state.snake = copy.deepcopy(self.new_state.snake)
@@ -116,28 +117,31 @@ class GameEngine(GameWindow):
         return dis_x + dis_y
 
     def training(self):
+        episode_rewards = []
         for i_episode in range(self.num_episodes):
+            rewards = []
             self.iteration = 0
             self.screens.append(self.state.to_image())
             self.screens.append(self.state.to_image())
             self.screens.append(self.state.to_image())
             self.screens.append(self.state.to_image())
             state = np.squeeze(self.screens)
-            print(np.shape(state))
             self.done = False
             while not self.done:
                 self.iteration += 1
                 action = self.agent.get_action(torch.tensor([state], device=self.agent.device))
 
-
                 # print("allowed actions {} and action {}".format(pos_a, action))
-                self.screens.append(self.state.to_image())
-                if not self.done:
-                    next_state =  np.squeeze(self.screens)
-                else:
-                    next_state = None
-
                 self.step(action=action)
+                if not self.done:
+                    self.screens.append(self.state.to_image())
+                    next_state = np.squeeze(self.screens)
+
+                else:
+                    self.screens.append(np.zeros((1, PLAYGROUND_SIZEX, PLAYGROUND_SIZEY), dtype=np.float))
+                    next_state = np.squeeze(self.screens)
+
+                rewards.append(self.reward)
                 observation = Transition(
                     torch.tensor([state], device=self.agent.device),
                     torch.tensor([action], device=self.agent.device),
@@ -147,17 +151,27 @@ class GameEngine(GameWindow):
                 self.agent.step(observation)
 
                 state = next_state
-                print("reward {} in epsiode {}".format(self.reward, i_episode))
+
                 if self.state.snake_length > self.high_score:
                     self.high_score = self.state.snake_length
-                    print("new high score {}".format(self.high_score))
+                    # print("new high score {}".format(self.high_score))
                 if self.done:
+                    print("reward {} duration {} episode {},"
+                          " max snake length {}".format(np.sum(rewards), self.iteration,
+                                                        i_episode, self.high_score))
+                    episode_rewards.append(np.sum(rewards))
+                    self.high_score = 0
                     self.restart()
             if i_episode % self.agent.target_update == 0:
                 self.agent.update_target_network()
-                print("updating target network")
-        print("high score {}".format(self.high_score))
-        self.agent.plot()
+        smoothed_rewards = pd.Series.rolling(pd.Series(episode_rewards), 10).mean()
+        smoothed_rewards = [elem for elem in smoothed_rewards]
+        plt.plot(episode_rewards)
+        plt.plot(smoothed_rewards)
+        plt.plot()
+        plt.xlabel('Episode')
+        plt.ylabel('Reward')
+        plt.show()
 
     def run(self):
         if self.start_run == 0:
@@ -181,4 +195,5 @@ class GameEngine(GameWindow):
         self.step(action=action)
         if self.done:
             self.restart()
+            self.start_run = 0
         self.draw(self.state)

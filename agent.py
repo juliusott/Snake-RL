@@ -23,7 +23,7 @@ class Network(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        print("input shape {}".format(x.shape))
+        # print("input shape {}".format(x.shape))
         x = F.relu(self.conv1(x))
         x = self.max(F.relu(self.conv2(x)))
         x = x.view(x.size(0), -1)
@@ -70,7 +70,7 @@ class Agent:
         all_actions = np.arange(0, 4)
         with torch.no_grad():
             out = self.policy_network(state.double())
-            print("proba distro {}".format(out))
+            # print("proba distro {}".format(out))
             action = np.random.choice(all_actions, p= out.cpu().numpy()[0])
         """
         if np.random.rand() < eps_threshold:

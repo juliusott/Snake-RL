@@ -50,7 +50,7 @@ class State:
         return state
 
     def to_image(self):
-        state = np.zeros((PLAYGROUND_SIZEX, PLAYGROUND_SIZEY))
+        state = np.zeros((PLAYGROUND_SIZEX, PLAYGROUND_SIZEY), dtype=np.float)
         head = self.snake[0]
         state[head.x, head.y] = 200
         for point in self.snake[1:]:
