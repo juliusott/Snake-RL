@@ -1,11 +1,8 @@
 from GameWindow import GameWindow
-import sys
-import numpy as np
 from PySide2.QtCore import QTimer, QObject, SIGNAL
 import copy
-from itertools import count
-import pandas as pd
-from agent import *
+
+from Globals import *
 
 
 class GameEngine(GameWindow):
@@ -16,7 +13,6 @@ class GameEngine(GameWindow):
         self.distance_to_apple = 0  # store euclidean distance from snake head to apple
         self.iteration = 0
         self.num_episodes = num_episodes  # number of games we want to play
-        self.agent = Agent()
         self.reward = 0
         self.timer = QTimer(self)
         self.snake_length = 1
@@ -25,8 +21,6 @@ class GameEngine(GameWindow):
         self.new_state = State(snake=[], goal=Point(0, 0), snake_length=self.snake_length)
         self.randomInit()
         self.start_run = 0
-        self.network_state = None
-        self.screens = deque(maxlen=4)  # maxlen determines how many screens you want to give to the agent
         self.high_score = 0
 
     def testInit(self):
@@ -40,7 +34,7 @@ class GameEngine(GameWindow):
         self.state.snake.append(Point(np.random.randint(0, PLAYGROUND_SIZEX), np.random.randint(0, PLAYGROUND_SIZEY)))
         self.state.goal = Point(np.random.randint(0, PLAYGROUND_SIZEX), np.random.randint(0, PLAYGROUND_SIZEY))
 
-    def restart(self):
+    def reset(self):
         self.new_state.snake = []
         self.new_state.snake.append(
             Point(np.random.randint(0, PLAYGROUND_SIZEX), np.random.randint(0, PLAYGROUND_SIZEY)))
@@ -48,11 +42,7 @@ class GameEngine(GameWindow):
         self.state.snake_length = 1
         self.state.snake = copy.deepcopy(self.new_state.snake)
         self.start_run = 0
-
-    def action_to_one_hot(self, action):
-        action_one_hot = np.zeros(4)
-        action_one_hot[action] = 1
-        return action_one_hot
+        return self.state.to_image()
 
     def step(self, action):
         directions = ["up", "down", "left", "right"]
@@ -102,7 +92,7 @@ class GameEngine(GameWindow):
         # copy updated state to new state
         self.state.snake = copy.deepcopy(self.new_state.snake)
 
-        # print("New state {}".format(self.state.snake))
+        return self.state.to_image(), self.reward, self.done
 
     def start(self):
         self.timer.timeout.connect(self.run)
@@ -115,63 +105,6 @@ class GameEngine(GameWindow):
         dis_x = np.abs(snake_head.x - self.state.goal.x) % (PLAYGROUND_SIZEX - 1)
         dis_y = np.abs(snake_head.y - self.state.goal.y) % (PLAYGROUND_SIZEX - 1)
         return dis_x + dis_y
-
-    def training(self):
-        episode_rewards = []
-        for i_episode in range(self.num_episodes):
-            rewards = []
-            self.iteration = 0
-            self.screens.append(self.state.to_image())
-            self.screens.append(self.state.to_image())
-            self.screens.append(self.state.to_image())
-            self.screens.append(self.state.to_image())
-            state = np.squeeze(self.screens)
-            self.done = False
-            while not self.done:
-                self.iteration += 1
-                action = self.agent.get_action(torch.tensor([state], device=self.agent.device))
-
-                # print("allowed actions {} and action {}".format(pos_a, action))
-                self.step(action=action)
-                if not self.done:
-                    self.screens.append(self.state.to_image())
-                    next_state = np.squeeze(self.screens)
-
-                else:
-                    self.screens.append(np.zeros((1, PLAYGROUND_SIZEX, PLAYGROUND_SIZEY), dtype=np.float))
-                    next_state = np.squeeze(self.screens)
-
-                rewards.append(self.reward)
-                observation = Transition(
-                    torch.tensor([state], device=self.agent.device),
-                    torch.tensor([action], device=self.agent.device),
-                    torch.tensor([next_state], device=self.agent.device),
-                    torch.tensor([self.reward], device=self.agent.device, dtype=torch.double))
-
-                self.agent.step(observation)
-
-                state = next_state
-
-                if self.state.snake_length > self.high_score:
-                    self.high_score = self.state.snake_length
-                    # print("new high score {}".format(self.high_score))
-                if self.done:
-                    print("reward {} duration {} episode {},"
-                          " max snake length {}".format(np.sum(rewards), self.iteration,
-                                                        i_episode, self.high_score))
-                    episode_rewards.append(np.sum(rewards))
-                    self.high_score = 0
-                    self.restart()
-            if i_episode % self.agent.target_update == 0:
-                self.agent.update_target_network()
-        smoothed_rewards = pd.Series.rolling(pd.Series(episode_rewards), 10).mean()
-        smoothed_rewards = [elem for elem in smoothed_rewards]
-        plt.plot(episode_rewards)
-        plt.plot(smoothed_rewards)
-        plt.plot()
-        plt.xlabel('Episode')
-        plt.ylabel('Reward')
-        plt.show()
 
     def run(self):
         if self.start_run == 0:
